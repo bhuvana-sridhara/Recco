@@ -33,7 +33,7 @@ def main():
 
         st.subheader("Sample recommendations")
         # Use the trivial recommend() function for POC results
-        recs = recommend("guest", 5)
+        recs = recommend("guest", 10)
         for r in recs:
             st.write(f"- **{r['title']}** ({r['year']})")
 
