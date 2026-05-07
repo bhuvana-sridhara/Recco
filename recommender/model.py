@@ -8,7 +8,7 @@ from typing import List, Dict
 from .data import get_sample_movies
 
 
-def recommend(user: str, n: int = 5) -> List[Dict]:
+def recommend(user: str, n: int = 10) -> List[Dict]:
     """Return the top-n sample movies.
 
     Args:
