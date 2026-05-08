@@ -11,7 +11,7 @@ if ROOT not in sys.path:
 
 import streamlit as st
 
-from recommender.model import recommend
+from recommender.model import recommend_from_blurb
 
 
 def main():
@@ -33,7 +33,7 @@ def main():
 
         st.subheader("Sample recommendations")
         # Use the trivial recommend() function for POC results
-        recs = recommend("guest", 10)
+        recs = recommend_from_blurb("guest", 5)
         for r in recs:
             st.write(f"- **{r['title']}** ({r['year']})")
 

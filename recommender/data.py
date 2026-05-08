@@ -63,3 +63,29 @@ def get_sample_movies_from_tmdb():
     params = {"api_key": API_KEY, "language": "en-US", "page": 1}
     response = requests.get(url, params=params)
     return response.json().get("results", []) # using get() is cleaner and avoids KeyError if "results" is missing
+
+
+def movie_to_text(movie: dict) -> str:
+    genres = " ".join(g["name"] for g in movie.get("genres", []))
+    overview = movie.get("overview", "")
+    title = movie.get("title", "")
+    return f"{title}. {overview} Genres: {genres}"
+
+def get_movies_blurb(query: str) -> list[dict]:
+    """Fetch candidate movies from TMDB using keyword search."""
+    url = f"{BASE_URL}/search/movie"
+    params = {"api_key": API_KEY, "query": query, "page": 1}
+    results = requests.get(url, params=params).json().get("results", [])
+    
+    # enrich with full details so we get genres
+    enriched = []
+    for r in results[:10]:  # limit to avoid too many API calls
+        detail = requests.get(
+            f"{BASE_URL}/movie/{r['id']}",
+            params={"api_key": API_KEY}
+        ).json()
+        enriched.append(detail)
+    
+    # embed each candidate's text
+    candidate_texts = [movie_to_text(m) for m in enriched]
+    return candidate_texts
