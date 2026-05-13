@@ -5,14 +5,10 @@ from turtle import st
 from dotenv import load_dotenv
 import os
 import requests
+from .util import get_api_key
 
-load_dotenv()
-def get_api_key() -> str:
-    # try .env first, fall back to st.secrets
-    return os.getenv("TMDB_API_KEY") or st.secrets.get("TMDB_API_KEY")
-    
 
-API_KEY = get_api_key()
+API_KEY = get_api_key("TMDB_API_KEY")
 BASE_URL = "https://api.themoviedb.org/3"
 
 # Streamlit Cloud - switch to this during deployment, and ensure the API key is set in the Streamlit secrets:
@@ -65,11 +61,7 @@ def get_sample_movies_from_tmdb():
     return response.json().get("results", []) # using get() is cleaner and avoids KeyError if "results" is missing
 
 
-def movie_to_text(movie: dict) -> str:
-    genres = " ".join(g["name"] for g in movie.get("genres", []))
-    overview = movie.get("overview", "")
-    title = movie.get("title", "")
-    return f"{title}. {overview} Genres: {genres}"
+
 
 def get_movies_blurb(query: str) -> list[dict]:
     """Fetch candidate movies from TMDB using keyword search."""
@@ -86,6 +78,8 @@ def get_movies_blurb(query: str) -> list[dict]:
         ).json()
         enriched.append(detail)
     
+    return enriched
+    
     # embed each candidate's text
-    candidate_texts = [movie_to_text(m) for m in enriched]
-    return candidate_texts
+    # candidate_texts = [movie_to_text(m) for m in enriched]
+    # return candidate_texts
