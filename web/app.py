@@ -18,7 +18,7 @@ if ROOT not in sys.path:
 
 import streamlit as st
 
-from recommender.model import recommend_from_blurb
+from recommender.model import recommend_from_blurb, QuotaExceededError
 
 
 def main():
@@ -39,7 +39,11 @@ def main():
             return
 
         with st.spinner("Finding movies..."):
-            results = recommend_from_blurb(blurb)
+            try:
+                results = recommend_from_blurb(blurb)
+            except QuotaExceededError:
+                st.warning("⚠️ Too many requests - try again tomorrow! (This is what happens when you use free stuff 😅)")
+                st.stop()
 
         st.subheader("Recommendations")
         st.write(f"We have {len(results)} recommendations for you:")
@@ -62,6 +66,7 @@ def main():
                 st.caption(f"{year}  ·  ⭐ {rating:.1f}  ·  {genres}")
                 
                 st.write(movie.get("overview", ""))
+                st.write(f"Reason: {movie.get("reason", "")}")
             
             st.divider()  # clean separator between movies
 

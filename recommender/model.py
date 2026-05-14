@@ -3,9 +3,9 @@
 This module intentionally contains a trivial recommendation function so
 the Streamlit UI can demonstrate integration with the backend.
 """
+from turtle import st
 import warnings
 import logging
-import os
 import json
 import re
 
@@ -16,6 +16,7 @@ logging.getLogger("streamlit").setLevel(logging.ERROR)
 from typing import List, Dict
 import numpy as np
 import google.generativeai as genai
+from google.api_core.exceptions import ResourceExhausted
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from .data import get_sample_movies, get_movies_blurb
@@ -25,6 +26,10 @@ from .util import get_api_key
 genai.configure(api_key=get_api_key("GEMINI_API_KEY"))
 gemini = genai.GenerativeModel("gemini-2.5-flash")
 encoder = SentenceTransformer("all-MiniLM-L6-v2")
+
+class QuotaExceededError(Exception):
+    """Custom exception for when Gemini API quota is exceeded."""
+    pass
 
 # sanity check that we can connect to Gemini and list models
 def get_models():
@@ -62,7 +67,11 @@ def process_blurb(blurb: str) -> dict:
 
     Only return the raw JSON object. no markdown, no backticks, nothing else."""
 
-    response = gemini.generate_content(prompt)
+    try:
+        response = gemini.generate_content(prompt)
+    except ResourceExhausted:
+        # fall back to returning the raw blurb as-is
+        raise QuotaExceededError()
 
     try:
         return json.loads(response.text)
@@ -71,7 +80,23 @@ def process_blurb(blurb: str) -> dict:
         if match:
             return json.loads(match.group())
         return {"search_terms": [blurb], "expanded": blurb}
+    
+def get_candidate_summaries(candidates: List[dict], blurb: str, n: int):    
+    # build candidate list for Gemini to reason over
+    candidate_summaries = [
+        f"{i}. {m['title']} ({m.get('release_date', '')[:4]}): {m.get('overview', '')}"
+        for i, m in enumerate(candidates)
+    ]
 
+    prompt = f"""A user wants to watch a movie and described it as: "{blurb}"
+    From the following list, pick the top {n} that best match. For each, return the index number and a one-sentence reason why it fits.
+    {chr(10).join(candidate_summaries)}
+
+    Return only a JSON array like this, nothing else:
+    [{{"index": 0, "reason": "..."}}, ...]"""
+
+    response = gemini.generate_content(prompt)
+    return response
 
 def recommend_from_blurb(blurb: str, n: int = 5) -> list[dict]:
     # get expanded processed blurb with search terms
@@ -94,18 +119,37 @@ def recommend_from_blurb(blurb: str, n: int = 5) -> list[dict]:
 
     if not unique:
         return []
+    
+    try:
+        # build candidate list for Gemini to reason over
+        response = get_candidate_summaries(unique, blurb, n)
+        raw = re.sub(r"```json|```", "", response.text).strip()
+        ranked = json.loads(raw)
+    except ResourceExhausted:
+        raise QuotaExceededError()
+    except json.JSONDecodeError:
+        match = re.search(r'\[.*\]', response.text, re.DOTALL)
+        if match:
+            ranked = json.loads(match.group())
+        else:
+            print("Gemini ranking failed, falling back to cosine similarity")
+            expanded_vector = encoder.encode([processed["expanded"]])
+            candidate_texts = [movie_to_text(m) for m in unique]
+            candidate_vectors = encoder.encode(candidate_texts)
+            scores = cosine_similarity(expanded_vector, candidate_vectors)[0]
+            ranked_fallback = sorted(zip(scores, unique), reverse=True)
+            return [movie for _, movie in ranked_fallback[:n]]
 
-    # embed expanded blurb + rank candidates
-    expanded_vector = encoder.encode([processed["expanded"]])
-    candidate_texts = [movie_to_text(m) for m in unique]
-    candidate_vectors = encoder.encode(candidate_texts)
+    results = []
+    for item in ranked[:n]:
+        idx = item.get("index")
+        if idx is not None and idx < len(unique):
+            movie = unique[idx]
+            movie["reason"] = item.get("reason", "")
+            results.append(movie)
+    
+    print("Gemini ranked results:")
+    for m in results:
+        print(m['title'])
 
-    # compute cosine similarity and rank
-    scores = cosine_similarity(expanded_vector, candidate_vectors)[0]
-    ranked = sorted(zip(scores, unique), reverse=True)
-
-    print(f"Ranking {len(unique)} unique candidates")
-    for score, movie in ranked[:n]:
-        print(f"  {score:.4f} - {movie['title']}")
-
-    return [movie for _, movie in ranked[:n]]
+    return results

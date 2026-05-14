@@ -71,7 +71,7 @@ def get_movies_blurb(query: str) -> list[dict]:
     
     # enrich with full details so we get genres
     enriched = []
-    for r in results[:10]:  # limit to avoid too many API calls
+    for r in results[:20]:  # limit to avoid too many API calls
         detail = requests.get(
             f"{BASE_URL}/movie/{r['id']}",
             params={"api_key": API_KEY}
@@ -79,7 +79,3 @@ def get_movies_blurb(query: str) -> list[dict]:
         enriched.append(detail)
     
     return enriched
-    
-    # embed each candidate's text
-    # candidate_texts = [movie_to_text(m) for m in enriched]
-    # return candidate_texts
