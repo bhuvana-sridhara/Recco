@@ -46,7 +46,7 @@ def main():
                 st.stop()
 
         st.subheader("Recommendations")
-        st.write(f"We have {len(results)} recommendations for you:")
+        st.write(f"We have {len(results)} recommendations for you based on your likes and dislikes:")
         for movie in results:
             col1, col2 = st.columns([1, 3])
             

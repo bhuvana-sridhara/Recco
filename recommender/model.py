@@ -21,6 +21,7 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from .data import get_sample_movies, get_movies_blurb
 from .util import get_api_key
+from .profiles import get_sample_profile
 
 # Configure Gemini API key
 genai.configure(api_key=get_api_key("GEMINI_API_KEY"))
@@ -57,9 +58,19 @@ def movie_to_text(movie: dict) -> str:
     title = movie.get("title", "")
     return f"{title}. {overview} Genres: {genres}"
 
+def get_profile_details_prompt():
+    sample_profile = get_sample_profile()
+    return f"""
+    - Liked movies: {', '.join(sample_profile['liked_movies'])}
+    - Disliked movies: {', '.join(sample_profile['disliked_movies'])}
+    """
+
 def process_blurb(blurb: str) -> dict:
     """Use Gemini to extract search terms + expand blurb for better embedding."""
     prompt = f"""A user wants to watch a movie and described it as: "{blurb}"
+
+    Here are some of the user's preferences:
+    {get_profile_details_prompt()}
 
     Return a JSON object with exactly these two fields:
     - "search_terms": a list of 3 short TMDB-friendly search queries (1-3 words each)
