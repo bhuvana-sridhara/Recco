@@ -21,7 +21,7 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from .data import get_sample_movies, get_movies_blurb
 from .util import get_api_key
-from .profiles import get_sample_profile
+from .profiles import get_full_profile
 
 # Configure Gemini API key
 genai.configure(api_key=get_api_key("GEMINI_API_KEY"))
@@ -58,19 +58,22 @@ def movie_to_text(movie: dict) -> str:
     title = movie.get("title", "")
     return f"{title}. {overview} Genres: {genres}"
 
-def get_profile_details_prompt():
-    sample_profile = get_sample_profile()
-    return f"""
-    - Liked movies: {', '.join(sample_profile['liked_movies'])}
-    - Disliked movies: {', '.join(sample_profile['disliked_movies'])}
-    """
+def get_profile_details_prompt(profile: dict):
+    profile = get_full_profile(profile["username"])
+    profile_prompt = ""
+    if profile:
+        for key, value in profile.items():
+            if isinstance(value, list):
+                value = ", ".join(value)
+            profile_prompt += f"{key}: {value}\n"
+    return profile_prompt
 
-def process_blurb(blurb: str) -> dict:
+def process_blurb(blurb: str, profile: dict) -> dict:
     """Use Gemini to extract search terms + expand blurb for better embedding."""
     prompt = f"""A user wants to watch a movie and described it as: "{blurb}"
 
-    Here are some of the user's preferences:
-    {get_profile_details_prompt()}
+    Here are the user's details:
+    {get_profile_details_prompt(profile) if profile else "No profile information available."}
 
     Return a JSON object with exactly these two fields:
     - "search_terms": a list of 3 short TMDB-friendly search queries (1-3 words each)
@@ -109,9 +112,9 @@ def get_candidate_summaries(candidates: List[dict], blurb: str, n: int):
     response = gemini.generate_content(prompt)
     return response
 
-def recommend_from_blurb(blurb: str, n: int = 5) -> list[dict]:
+def recommend_from_blurb(blurb: str, profile: dict | None = None, n: int = 5) -> list[dict]:
     # get expanded processed blurb with search terms
-    processed = process_blurb(blurb)
+    processed = process_blurb(blurb, profile)
     print(f"Search terms: {processed['search_terms']}")
     print(f"Expanded: {processed['expanded']}")
 
