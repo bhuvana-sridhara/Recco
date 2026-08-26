@@ -1,3 +1,6 @@
 streamlit
 python-dotenv
 requests
+sentence-transformers
+torchvision
+google-generativeai

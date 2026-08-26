@@ -5,14 +5,10 @@ from turtle import st
 from dotenv import load_dotenv
 import os
 import requests
+from .util import get_api_key
 
-load_dotenv()
-def get_api_key() -> str:
-    # try .env first, fall back to st.secrets
-    return os.getenv("TMDB_API_KEY") or st.secrets.get("TMDB_API_KEY")
-    
 
-API_KEY = get_api_key()
+API_KEY = get_api_key("TMDB_API_KEY")
 BASE_URL = "https://api.themoviedb.org/3"
 
 # Streamlit Cloud - switch to this during deployment, and ensure the API key is set in the Streamlit secrets:
@@ -63,3 +59,23 @@ def get_sample_movies_from_tmdb():
     params = {"api_key": API_KEY, "language": "en-US", "page": 1}
     response = requests.get(url, params=params)
     return response.json().get("results", []) # using get() is cleaner and avoids KeyError if "results" is missing
+
+
+
+
+def get_movies_blurb(query: str) -> list[dict]:
+    """Fetch candidate movies from TMDB using keyword search."""
+    url = f"{BASE_URL}/search/movie"
+    params = {"api_key": API_KEY, "query": query, "page": 1}
+    results = requests.get(url, params=params).json().get("results", [])
+    
+    # enrich with full details so we get genres
+    enriched = []
+    for r in results[:20]:  # limit to avoid too many API calls
+        detail = requests.get(
+            f"{BASE_URL}/movie/{r['id']}",
+            params={"api_key": API_KEY}
+        ).json()
+        enriched.append(detail)
+    
+    return enriched
