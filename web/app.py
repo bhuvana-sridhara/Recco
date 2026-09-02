@@ -99,8 +99,11 @@ def main():
             try:
                 results = recommend_from_blurb(blurb, profile=profile)
             except QuotaExceededError:
-                st.warning("⚠️ Too many requests - try again tomorrow! (This is what happens when you use free stuff 😅)")
-                st.stop()
+                results = None
+                
+        if results is None:
+            st.warning("⚠️ Too many requests - try again tomorrow! (This is what happens when you use free stuff 😅)")
+            st.stop()
 
         st.subheader("Recommendations")
         st.write(f"We have {len(results)} recommendations for you based on your likes and dislikes:")
