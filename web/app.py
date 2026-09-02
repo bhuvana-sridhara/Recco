@@ -17,13 +17,65 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 import streamlit as st
-
 from recommender.model import recommend_from_blurb, QuotaExceededError
+from recommender.db import init_db
+from recommender.profiles import (
+    register_profile, load_profile, rate_movie, get_full_profile, update_genres
+)
 
+init_db()  # ensure DB tables are created before handling any requests
+
+def profile_section():
+    st.sidebar.title("👤 Profile")
+
+    if "username" not in st.session_state:
+        st.session_state.username = None
+
+    if st.session_state.username:
+        st.sidebar.success(f"Logged in as **{st.session_state.username}**")
+
+        st.sidebar.markdown("**Liked genres**")
+        liked = st.sidebar.text_input("e.g. drama, thriller", key="liked_genres")
+
+        st.sidebar.markdown("**Disliked genres**")
+        disliked = st.sidebar.text_input("e.g. horror, musical", key="disliked_genres")
+
+        if st.sidebar.button("Save preferences"):
+            profile = load_profile(st.session_state.username)
+            liked_list = [g.strip() for g in liked.split(",") if g.strip()]
+            disliked_list = [g.strip() for g in disliked.split(",") if g.strip()]
+            update_genres(st.session_state.username, liked_list, disliked_list)
+            st.sidebar.success("Preferences saved!")
+
+        if st.sidebar.button("Log out"):
+            st.session_state.username = None
+            st.rerun()
+
+    else:
+        username_input = st.sidebar.text_input("Username")
+        col1, col2 = st.sidebar.columns(2)
+        with col1:
+            if st.sidebar.button("Log in"):
+                profile = load_profile(username_input)
+                if profile:
+                    st.session_state.username = username_input
+                    st.rerun()
+                else:
+                    st.sidebar.error("Profile not found.")
+        with col2:
+            if st.sidebar.button("Register"):
+                try:
+                    register_profile(username_input)
+                    st.session_state.username = username_input
+                    st.rerun()
+                except ValueError as e:
+                    st.sidebar.error(str(e))
 
 def main():
     st.set_page_config(page_title="Recco.", page_icon="🎬")
     st.title("Recco.")
+
+    profile_section()
 
     st.markdown("""
     Recco. — quick movie recommender proof-of-concept.
@@ -37,13 +89,21 @@ def main():
         if not blurb:
             st.warning("Please enter a blurb first.")
             return
+        
+        # grab profile if logged in
+        profile = None
+        if st.session_state.get("username"):
+            profile = get_full_profile(st.session_state.username)
 
         with st.spinner("Finding movies..."):
             try:
-                results = recommend_from_blurb(blurb)
+                results = recommend_from_blurb(blurb, profile=profile)
             except QuotaExceededError:
-                st.warning("⚠️ Too many requests - try again tomorrow! (This is what happens when you use free stuff 😅)")
-                st.stop()
+                results = None
+                
+        if results is None:
+            st.warning("⚠️ Too many requests - try again tomorrow! (This is what happens when you use free stuff 😅)")
+            st.stop()
 
         st.subheader("Recommendations")
         st.write(f"We have {len(results)} recommendations for you based on your likes and dislikes:")
